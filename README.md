@@ -5,7 +5,6 @@ Local task API for the assignment. Users, tasks, login challenges, and email log
 ## Setup
 
 ```bash
-cd rust
 cp .env.example .env
 ```
 
@@ -83,6 +82,70 @@ curl -s -X POST http://127.0.0.1:3000/tasks/assign \
 7. Creating a task as James Bond returns `403`.
 
 8. `GET /tasks/view-my-tasks` with James Bond's token returns the three assigned tasks. The first response has `cache.hit` false. The same call again has `cache.hit` true.
+
+## Frontend
+
+The UI is a Next.js app in `ui/`. It calls this API. The browser does not call the API directly. The access token from verify is stored in an httpOnly cookie.
+
+```bash
+cd ui
+cp .env.example .env.local
+npm install
+npm run dev -- --port 3001
+```
+
+Leave the API running on port 3000. Open http://127.0.0.1:3001. Seed the users, sign in, and read the verification code on the next screen. Admin creates tasks and assigns them. Sign out, then sign in as James Bond to see my tasks. "Load my tasks again" shows the cache hit. Creating a task as James Bond shows that staff cannot create tasks.
+
+```bash
+cd ui
+npm run e2e
+```
+
+That starts the API on port 3099 with a fresh SQLite file and the UI on port 3100, then walks the validation flow in a browser.
+
+The UI adds a browser path over the same API: seed both users, reject a bad password, finish a login challenge from the email log, create five tasks, assign Alpha, Bravo, and Charlie to James Bond, then show his my tasks as a cache miss, a cache hit, and a blocked create. `rounds/` is that walkthrough, one shot per step.
+
+## Walkthrough
+
+1. Sign-in at http://127.0.0.1:3001 after seed. Admin is `admin` and James Bond is `staff`. Passwords stay off the list.
+
+![Seeded users and an empty sign-in form](rounds/1.jpg)
+
+2. A wrong Admin password stays on Sign in and says the email or password is wrong.
+
+![Wrong password stays on Sign in](rounds/2.jpg)
+
+3. The Admin email and password are filled in for the real login. The previous rejection is still on the form until Verify.
+
+![Admin credentials filled in](rounds/3.jpg)
+
+4. Verification code reads the email log: a 6-digit code for `admin@example.com` (`189081` in this run). The session starts only after Verify.
+
+![Email log shows the Admin verification code](rounds/4.jpg)
+
+5. Admin lands on Create tasks with an empty visit list. My tasks is a cache miss: 0 assigned tasks.
+
+![Empty admin screen after verify](rounds/5.jpg)
+
+6. Alpha, Bravo, Charlie, Delta, and Echo exist. Alpha, Bravo, and Charlie are checked. The assignee is `jamesbond@example.com`. The line above the button says `Created Echo.`
+
+![Five tasks created, three selected to assign](rounds/6.jpg)
+
+7. James Bond is signed in as staff. My tasks lists those three, each assigned to `jamesbond@example.com`, and the line says cache miss.
+
+![James Bond's first my-tasks load is a cache miss](rounds/7.jpg)
+
+8. Load my tasks again. The same three tasks stay, and the line says cache hit.
+
+![The second load is a cache hit](rounds/8.jpg)
+
+9. A staff create says `You cannot create tasks. Only an admin can.` The cache hit and the three tasks stay on the page.
+
+![Staff cannot create a task](rounds/9.jpg)
+
+10. `loom.db` matches the screens. `users` holds Admin and James Bond with Argon2 hashes. `tasks` holds five rows; Alpha, Bravo, and Charlie point at James Bond, and Delta and Echo have no assignee. `login_challenges` stores code hashes. `email_logs` stores the plaintext codes, including James Bond's `587362`.
+
+![SQLite rows for users, tasks, challenges, and the email log](rounds/10.jpg)
 
 ## Tests
 
